@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Efficient Frontier Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Inlined Manifest for PWA -->
+    <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22Efficient%20Frontier%20PWA%22%2C%22short_name%22%3A%22EFrontier%22%2C%22description%22%3A%22A%20Markowitz%20Efficient%20Frontier%20calculator%20and%20visualizer.%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f3f4f6%22%2C%22theme_color%22%3A%22%231f2937%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22https%3A//placehold.co/192x192/4f46e5/ffffff%3Ftext%3DEF%22%2C%22sizes%22%3A%22192x192%22%2C%22type%22%3A%22image/png%22%7D%2C%7B%22src%22%3A%22https%3A//placehold.co/512x512/4f46e5/ffffff%3Ftext%3DEF%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image/png%22%7D%5D%7D">
+    
+    <link rel="apple-touch-icon" href="https://placehold.co/192x192/000000/ffffff?text=EF">
+    <meta name="theme-color" content="#1f2937">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 min-h-screen flex items-center justify-center p-4">
+
+    <div class="w-full max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-2xl p-6 md:p-8 space-y-6">
+
+        <!-- Header -->
+        <header class="text-center">
+            <h1 class="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">Markowitz Efficient Frontier</h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-1">Visualize optimal portfolio allocations.</p>
+        </header>
+
+        <!-- Screen 1: Setup -->
+        <div id="setup-screen">
+            <div class="bg-gray-50 dark:bg-gray-700 p-6 rounded-lg">
+                <label for="num-securities" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Number of Securities (2-10)</label>
+                <input type="number" id="num-securities" min="2" max="10" value="3" class="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm p-3 focus:ring-indigo-500 focus:border-indigo-500">
+                <button id="generate-inputs-btn" class="mt-4 w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out">
+                    Next: Enter Data
+                </button>
+            </div>
+        </div>
+
+        <!-- Screen 2: Data Input -->
+        <div id="input-screen" class="hidden">
+            <div class="space-y-6">
+                <!-- Returns and Risks -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-2">Asset Details</h3>
+                    <div id="returns-risks-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"></div>
+                </div>
+
+                <!-- Correlations -->
+                <div>
+                    <h3 class="text-lg font-semibold mb-2">Asset Correlations</h3>
+                    <div id="correlations-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"></div>
+                </div>
+            </div>
+            <div id="calculation-controls" class="mt-6 flex flex-col sm:flex-row gap-3">
+                 <button id="calculate-btn" class="w-full sm:w-auto flex-grow bg-green-600 text-white font-bold py-3 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition duration-150 ease-in-out flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd" /></svg>
+                    Generate Frontier
+                </button>
+                <button id="back-to-setup-btn" class="w-full sm:w-auto bg-gray-500 text-white font-bold py-3 px-4 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 transition">
+                    Back
+                </button>
+            </div>
+             <div id="loader-container" class="hidden mt-4 flex flex-col items-center justify-center">
+                <div class="loader"></div>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Running simulations... please wait.</p>
+            </div>
+        </div>
+
+        <!-- Screen 3: Results -->
+        <div id="result-screen" class="hidden">
+            <div class="w-full aspect-w-16 aspect-h-9 bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <canvas id="frontier-chart"></canvas>
+            </div>
+            <button id="reset-btn" class="mt-6 w-full bg-indigo-600 text-white font-bold py-3 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition">
+                Start Over
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- PWA Service Worker Registration (Inlined) ---
+        if ('serviceWorker' in navigator) {
+            // The service worker code is stored in a string.
+            const swCode = `
+                const CACHE_NAME = 'efficient-frontier-cache-v1';
+                // Since this is a single file, we only need to cache the root '.' and external CDN links.
+                const urlsToCache = [
+                    '.',
+                    'https://cdn.tailwindcss.com',
+                    'https://cdn.jsdelivr.net/npm/chart.js'
+                ];
+
+                self.addEventListener('install', event => {
+                    event.waitUntil(
+                        caches.open(CACHE_NAME)
+                        .then(cache => {
+                            console.log('Opened cache');
+                            return cache.addAll(urlsToCache);
+                        })
+                    );
+                });
+
+                self.addEventListener('fetch', event => {
+                    event.respondWith(
+                        caches.match(event.request)
+                        .then(response => {
+                            if (response) {
+                                return response; // Serve from cache
+                            }
+                            return fetch(event.request); // Fetch from network
+                        })
+                    );
+                });
+
+                self.addEventListener('activate', event => {
+                    const cacheWhitelist = [CACHE_NAME];
+                    event.waitUntil(
+                        caches.keys().then(cacheNames => {
+                            return Promise.all(
+                                cacheNames.map(cacheName => {
+                                    if (cacheWhitelist.indexOf(cacheName) === -1) {
+                                        return caches.delete(cacheName);
+                                    }
+                                })
+                            );
+                        })
+                    );
+                });
+            `;
+
+            // Create a Blob from the service worker string.
+            const swBlob = new Blob([swCode], { type: 'application/javascript' });
+            // Create a URL for the Blob.
+            const swUrl = URL.createObjectURL(swBlob);
+
+            window.addEventListener('load', () => {
+                // Register the service worker using the Blob URL.
+                navigator.serviceWorker.register(swUrl)
+                    .then(registration => console.log('Service Worker registered with scope:', registration.scope))
+                    .catch(error => console.log('Service Worker registration failed:', error));
+            });
+        }
+
+        // --- Application Logic ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Constants and State ---
+            const NUM_PORTFOLIOS = 25000;
+            let chartInstance = null;
+
+            // --- DOM Elements ---
+            const screens = {
+                setup: document.getElementById('setup-screen'),
+                input: document.getElementById('input-screen'),
+                result: document.getElementById('result-screen'),
+            };
+            const numSecuritiesInput = document.getElementById('num-securities');
+            const generateBtn = document.getElementById('generate-inputs-btn');
+            const calculateBtn = document.getElementById('calculate-btn');
+            const backBtn = document.getElementById('back-to-setup-btn');
+            const resetBtn = document.getElementById('reset-btn');
+            const returnsRisksContainer = document.getElementById('returns-risks-container');
+            const correlationsContainer = document.getElementById('correlations-container');
+            const loaderContainer = document.getElementById('loader-container');
+            const calcControls = document.getElementById('calculation-controls');
+
+            // --- UI Functions ---
+            const showScreen = (screenName) => {
+                Object.values(screens).forEach(screen => screen.classList.add('hidden'));
+                screens[screenName].classList.remove('hidden');
+            };
+
+            const generateInputFields = (num) => {
+                returnsRisksContainer.innerHTML = '';
+                correlationsContainer.innerHTML = '';
+                const securityLabels = Array.from({ length: num }, (_, i) => String.fromCharCode(65 + i));
+
+                // Generate Return and Risk inputs
+                securityLabels.forEach((label, i) => {
+                    const group = document.createElement('div');
+                    group.className = 'p-4 bg-gray-100 dark:bg-gray-700/50 rounded-lg';
+                    group.innerHTML = `
+                        <h4 class="font-bold text-center mb-2 text-indigo-500">Security ${label}</h4>
+                        <div class="space-y-2">
+                             <div>
+                                <label for="return-${i}" class="text-xs text-gray-600 dark:text-gray-400">Return (%)</label>
+                                <input type="number" id="return-${i}" value="${(5 + i * 2).toFixed(1)}" step="0.1" class="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md p-2 text-sm">
+                            </div>
+                            <div>
+                                <label for="risk-${i}" class="text-xs text-gray-600 dark:text-gray-400">Risk (Std. Dev. %)</label>
+                                <input type="number" id="risk-${i}" value="${(10 + i * 3).toFixed(1)}" step="0.1" class="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md p-2 text-sm">
+                            </div>
+                        </div>
+                    `;
+                    returnsRisksContainer.appendChild(group);
+                });
+
+                // Generate Correlation inputs
+                for (let i = 0; i < num; i++) {
+                    for (let j = i + 1; j < num; j++) {
+                        const group = document.createElement('div');
+                        group.className = 'p-3 bg-gray-100 dark:bg-gray-700/50 rounded-lg';
+                        group.innerHTML = `
+                            <label for="corr-${i}-${j}" class="text-xs text-gray-600 dark:text-gray-400">Corr (${securityLabels[i]}, ${securityLabels[j]})</label>
+                            <input type="number" id="corr-${i}-${j}" value="0.2" step="0.05" min="-1" max="1" class="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md p-2 mt-1 text-sm">
+                        `;
+                        correlationsContainer.appendChild(group);
+                    }
+                }
+            };
+
+            // --- Calculation Logic ---
+            const runSimulation = () => {
+                // Show loader, hide buttons
+                loaderContainer.classList.remove('hidden');
+                calcControls.classList.add('hidden');
+                
+                // Use setTimeout to allow UI to update before heavy calculation
+                setTimeout(() => {
+                    try {
+                        const num = parseInt(numSecuritiesInput.value, 10);
+                        const returns = [];
+                        const risks = [];
+                        const correlations = {};
+
+                        for (let i = 0; i < num; i++) {
+                            returns.push(parseFloat(document.getElementById(`return-${i}`).value) / 100);
+                            risks.push(parseFloat(document.getElementById(`risk-${i}`).value) / 100);
+                        }
+
+                        for (let i = 0; i < num; i++) {
+                            for (let j = i + 1; j < num; j++) {
+                                const val = parseFloat(document.getElementById(`corr-${i}-${j}`).value);
+                                correlations[`${i}-${j}`] = val;
+                                correlations[`${j}-${i}`] = val; // For easier lookup
+                            }
+                        }
+                        
+                        // Build covariance matrix
+                        const covMatrix = Array(num).fill(0).map(() => Array(num).fill(0));
+                        for (let i = 0; i < num; i++) {
+                            for (let j = 0; j < num; j++) {
+                                if (i === j) {
+                                    covMatrix[i][j] = risks[i] * risks[i]; // Variance
+                                } else {
+                                    covMatrix[i][j] = risks[i] * risks[j] * correlations[`${i}-${j}`];
+                                }
+                            }
+                        }
+
+                        const portfolioPoints = [];
+                        for (let p = 0; p < NUM_PORTFOLIOS; p++) {
+                            // Generate random weights that sum to 1
+                            let weights = Array.from({ length: num }, () => Math.random());
+                            const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+                            weights = weights.map(w => w / totalWeight);
+
+                            // Calculate portfolio return (dot product)
+                            const portfolioReturn = weights.reduce((sum, w, i) => sum + w * returns[i], 0);
+
+                            // Calculate portfolio variance
+                            let portfolioVariance = 0;
+                            for (let i = 0; i < num; i++) {
+                                for (let j = 0; j < num; j++) {
+                                    portfolioVariance += weights[i] * weights[j] * covMatrix[i][j];
+                                }
+                            }
+                            const portfolioRisk = Math.sqrt(portfolioVariance);
+
+                            portfolioPoints.push({
+                                x: portfolioRisk * 100, // as percentage
+                                y: portfolioReturn * 100, // as percentage
+                            });
+                        }
+                        
+                        const frontierPoints = findEfficientFrontier(portfolioPoints);
+                        
+                        renderChart(portfolioPoints, frontierPoints);
+                        showScreen('result');
+
+                    } catch (error) {
+                        console.error("Calculation Error:", error);
+                        alert("An error occurred during calculation. Please check your inputs.");
+                    } finally {
+                        // Hide loader, show buttons
+                        loaderContainer.classList.add('hidden');
+                        calcControls.classList.remove('hidden');
+                    }
+                }, 50); // 50ms delay
+            };
+            
+            const findEfficientFrontier = (points) => {
+                // Sort points by risk (x-axis)
+                const sortedPoints = [...points].sort((a, b) => a.x - b.x);
+                
+                const frontier = [];
+                let maxReturnSoFar = -Infinity;
+                
+                // A simple algorithm to find the upper hull
+                const riskBuckets = {};
+                sortedPoints.forEach(point => {
+                    const bucket = Math.floor(point.x * 100) / 100; // Bucket by 0.01 risk
+                    if (!riskBuckets[bucket] || point.y > riskBuckets[bucket].y) {
+                        riskBuckets[bucket] = point;
+                    }
+                });
+
+                const upperHull = Object.values(riskBuckets).sort((a,b) => a.x - b.x);
+                let maxReturn = -Infinity;
+                const finalFrontier = [];
+                upperHull.forEach(point => {
+                    if(point.y > maxReturn) {
+                        finalFrontier.push(point);
+                        maxReturn = point.y;
+                    }
+                });
+
+                return finalFrontier;
+            };
+
+
+            // --- Charting Function ---
+            const renderChart = (allPoints, frontierPoints) => {
+                const ctx = document.getElementById('frontier-chart').getContext('2d');
+                if (chartInstance) {
+                    chartInstance.destroy();
+                }
+                chartInstance = new Chart(ctx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [{
+                            label: 'Possible Portfolios',
+                            data: allPoints,
+                            backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                            pointRadius: 2,
+                            pointHoverRadius: 3,
+                        }, {
+                            label: 'Efficient Frontier',
+                            data: frontierPoints,
+                            borderColor: 'rgb(236, 72, 153)',
+                            backgroundColor: 'rgb(236, 72, 153)',
+                            showLine: true,
+                            fill: false,
+                            pointRadius: 0,
+                            borderWidth: 3,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                position: 'bottom',
+                                title: {
+                                    display: true,
+                                    text: 'Annualized Risk (Std. Dev. %)',
+                                    font: { size: 14 }
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Annualized Return (%)',
+                                    font: { size: 14 }
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        label += `(Risk: ${context.parsed.x.toFixed(2)}%, Return: ${context.parsed.y.toFixed(2)}%)`;
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            };
+
+            // --- Event Listeners ---
+            generateBtn.addEventListener('click', () => {
+                const num = parseInt(numSecuritiesInput.value, 10);
+                if (num >= 2 && num <= 10) {
+                    generateInputFields(num);
+                    showScreen('input');
+                } else {
+                    alert('Please enter a number between 2 and 10.');
+                }
+            });
+
+            calculateBtn.addEventListener('click', runSimulation);
+
+            backBtn.addEventListener('click', () => showScreen('setup'));
+
+            resetBtn.addEventListener('click', () => {
+                if (chartInstance) {
+                    chartInstance.destroy();
+                    chartInstance = null;
+                }
+                showScreen('setup');
+            });
+
+            // --- Initial State ---
+            showScreen('setup');
+        });
+    </script>
+</body>
+</html>
